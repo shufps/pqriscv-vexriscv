@@ -2,6 +2,9 @@ package mupq
 
 import scala.collection.mutable.ArrayBuffer
 
+import java.nio.{ByteBuffer, ByteOrder}
+
+
 import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.amba3.apb._
@@ -14,6 +17,187 @@ import spinal.lib.com.uart._
 import vexriscv._
 import vexriscv.demo.MuraxApb3Timer
 import vexriscv.plugin._
+/*
+class Apb3Key extends Component{
+  val apbConfig = Apb3Config(
+    addressWidth  = 12,
+    dataWidth     = 32,
+    selWidth      = 1,
+    useSlaveError = false
+  )
+
+  val io = new Bundle {
+    val apb = slave(Apb3(apbConfig))
+  }
+  
+  val data = List(U"had143d95", U"h10335acb", U"h7ca844fb", U"hb814c3ae", U"he66581ea", U"h4ab51e23", U"h505fb803", U"h1fb2f2fb").read(io.apb.PADDR(4 downto 2))
+  
+  io.apb.PRDATA := RegNext(data.asBits).resize(32)
+  io.apb.PREADY := True
+}
+*/
+
+class Apb3Key(onChipRamBinFile : String) extends Component{
+  import java.nio.file.{Files, Paths}
+  val byteArray = Files.readAllBytes(Paths.get(onChipRamBinFile))
+  val wordCount = (byteArray.length+3)/4
+  val buffer = ByteBuffer.wrap(Files.readAllBytes(Paths.get(onChipRamBinFile))).order(ByteOrder.LITTLE_ENDIAN);
+  val wordArray = (0 until wordCount).map(i => {
+    val v = buffer.getInt
+    if(v < 0)  BigInt(v.toLong & 0xFFFFFFFFl) else  BigInt(v)
+  })
+
+  val io = new Bundle{
+    val apb = slave(Apb3(log2Up(wordCount*4),32))
+  }
+
+  val rom = Mem(Bits(32 bits), wordCount) initBigInt(wordArray)
+//  io.apb.PRDATA := rom.readSync(io.apb.PADDR >> 2)
+  io.apb.PRDATA := rom.readAsync(RegNext(io.apb.PADDR >> 2))
+  io.apb.PREADY := True
+}
+
+class ICE40I2CMaster(i2cnum: Int = 0) extends Component {
+  val apbConfig = Apb3Config(
+    addressWidth  = 12,
+    dataWidth     = 32,
+    selWidth      = 1,
+    useSlaveError = false
+  )
+
+  val io = new Bundle {
+    val apb = slave(Apb3(apbConfig))
+    
+    val scl_i = in Bool
+    val scl_o = out Bool
+    val scl_oe = out Bool
+
+    val sda_i = in Bool
+    val sda_o = out Bool
+    val sda_oe = out Bool
+  }
+
+  val i2c = new Ice40I2C
+  
+  i2c.addGeneric("BUS_ADDR74", if (i2cnum == 0) { "0b0001"} else { "0b0011" })
+
+  val wr_enable = io.apb.PENABLE && io.apb.PWRITE && io.apb.PSEL(0)
+  //val rd_enable = !io.apb.PWRITE && io.apb.PSEL(0)
+  val rw = io.apb.PWRITE
+    
+  i2c.io.SBRWI := rw
+  i2c.io.SBSTBI := wr_enable
+  i2c.io.SBADRI0 := io.apb.PADDR(0)
+  i2c.io.SBADRI1 := io.apb.PADDR(1)
+  i2c.io.SBADRI2 := io.apb.PADDR(2)
+  i2c.io.SBADRI3 := io.apb.PADDR(3)
+  i2c.io.SBADRI4 := io.apb.PADDR(4)
+  i2c.io.SBADRI5 := io.apb.PADDR(5)
+  i2c.io.SBADRI6 := io.apb.PADDR(6)
+  i2c.io.SBADRI7 := io.apb.PADDR(7)
+  
+  i2c.io.SBDATI0 := io.apb.PWDATA(0)
+  i2c.io.SBDATI1 := io.apb.PWDATA(1)
+  i2c.io.SBDATI2 := io.apb.PWDATA(2)
+  i2c.io.SBDATI3 := io.apb.PWDATA(3)
+  i2c.io.SBDATI4 := io.apb.PWDATA(4)
+  i2c.io.SBDATI5 := io.apb.PWDATA(5)
+  i2c.io.SBDATI6 := io.apb.PWDATA(6)
+  i2c.io.SBDATI7 := io.apb.PWDATA(7)
+
+  io.scl_oe := i2c.io.SCLOE
+  io.scl_o := i2c.io.SCLO
+  i2c.io.SCLI := io.scl_i
+
+  io.sda_oe := i2c.io.SDAOE
+  io.sda_o := i2c.io.SDAO
+  i2c.io.SDAI := io.sda_i
+  
+  val data = i2c.io.SBDATO7 ## i2c.io.SBDATO6 ## i2c.io.SBDATO5 ## i2c.io.SBDATO4 ##
+             i2c.io.SBDATO3 ## i2c.io.SBDATO2 ## i2c.io.SBDATO1 ## i2c.io.SBDATO0
+             
+  io.apb.PRDATA := RegNext(data).resize(32)
+  io.apb.PREADY := True
+}
+
+class ICE40SPIMaster extends Component {
+  val apbConfig = Apb3Config(
+    addressWidth  = 12,
+    dataWidth     = 32,
+    selWidth      = 1,
+    useSlaveError = false
+  )
+
+  val io = new Bundle {
+    val apb = slave(Apb3(apbConfig))
+    
+    val miso_i = in Bool
+    val miso_o = out Bool
+    val miso_oe = out Bool
+
+    val mosi_i = in Bool
+    val mosi_o = out Bool
+    val mosi_oe = out Bool
+
+    val sck_i = in Bool
+    val sck_o = out Bool
+    val sck_oe = out Bool
+    
+    val ss_i = in Bool
+    val ss_o = out Bool
+    val ss_oe = out Bool
+  }
+
+  val spi = new Ice40SPI
+  spi.addGeneric("BUS_ADDR74", "0b0000")
+
+  val wr_enable = io.apb.PENABLE && io.apb.PWRITE && io.apb.PSEL(0)
+  //val rd_enable = !io.apb.PWRITE && io.apb.PSEL(0)
+  val rw = io.apb.PWRITE
+    
+  spi.io.SBRWI := rw
+  spi.io.SBSTBI := wr_enable
+  spi.io.SBADRI0 := io.apb.PADDR(0)
+  spi.io.SBADRI1 := io.apb.PADDR(1)
+  spi.io.SBADRI2 := io.apb.PADDR(2)
+  spi.io.SBADRI3 := io.apb.PADDR(3)
+  spi.io.SBADRI4 := io.apb.PADDR(4)
+  spi.io.SBADRI5 := io.apb.PADDR(5)
+  spi.io.SBADRI6 := io.apb.PADDR(6)
+  spi.io.SBADRI7 := io.apb.PADDR(7)
+  
+  spi.io.SBDATI0 := io.apb.PWDATA(0)
+  spi.io.SBDATI1 := io.apb.PWDATA(1)
+  spi.io.SBDATI2 := io.apb.PWDATA(2)
+  spi.io.SBDATI3 := io.apb.PWDATA(3)
+  spi.io.SBDATI4 := io.apb.PWDATA(4)
+  spi.io.SBDATI5 := io.apb.PWDATA(5)
+  spi.io.SBDATI6 := io.apb.PWDATA(6)
+  spi.io.SBDATI7 := io.apb.PWDATA(7)
+
+  io.mosi_oe := spi.io.MOE
+  io.mosi_o := spi.io.MO
+  spi.io.SI := io.mosi_i
+
+  io.miso_oe := spi.io.SOE
+  io.miso_o := spi.io.SO
+  spi.io.MI := io.miso_i
+
+  io.sck_oe := spi.io.SCKOE
+  io.sck_o := spi.io.SCKO
+  spi.io.SCKI := io.sck_i
+  
+  io.ss_oe := spi.io.MCSNOE0
+  io.ss_o := spi.io.MCSNO0
+  spi.io.SCSNI := io.ss_i
+  
+  val data = spi.io.SBDATO7 ## spi.io.SBDATO6 ## spi.io.SBDATO5 ## spi.io.SBDATO4 ##
+             spi.io.SBDATO3 ## spi.io.SBDATO2 ## spi.io.SBDATO1 ## spi.io.SBDATO0
+             
+  io.apb.PRDATA := RegNext(data).resize(32)
+  io.apb.PREADY := True
+}
+
 
 abstract class PQVexRiscv(
   cpuPlugins: () => Seq[Plugin[VexRiscv]],
@@ -104,7 +288,12 @@ extends Component {
 
   var gpio: TriStateArray = null
 
-  var uart: Uart = null
+  var uart : Uart = null
+  
+  var ice40spi : ICE40SPIMaster = null
+  var ice40i2c0 : ICE40I2CMaster = null
+  var ice40i2c1 : ICE40I2CMaster = null
+  var key : Apb3Key = null
 
   val peripherals = new ClockingArea(systemClockDomain) {
     if (gpioWidth > 0) {
@@ -168,6 +357,19 @@ extends Component {
         apbMapping += timer.io.apb -> (0x20000, 4 KiB)
       }
 
+      
+      ice40spi = new ICE40SPIMaster
+      apbMapping += ice40spi.io.apb -> (0x30000, 4 KiB)
+      
+      ice40i2c0 = new ICE40I2CMaster(0)
+      apbMapping += ice40i2c0.io.apb -> (0x40000, 4 KiB)
+      
+      ice40i2c1 = new ICE40I2CMaster(1)
+      apbMapping += ice40i2c1.io.apb -> (0x50000, 4 KiB)
+      
+      key = new Apb3Key("src/main/scala/mupq/secret.key")
+      apbMapping += key.io.apb -> (0x60000, 4 KiB)
+      
       val apbDecoder = Apb3Decoder(
         master = apbBridge.io.apb,
         slaves = apbMapping
@@ -203,7 +405,7 @@ object PQVexRiscv {
   def baseConfig(base: PluginGen = () => Seq()) = () =>
     base() ++ Seq(
       new IBusSimplePlugin(
-        resetVector = 0x80000000L,
+        resetVector = 0x00000000L,
         cmdForkOnSecondStage = true,
         cmdForkPersistence = false,
         prediction = NONE,
@@ -217,11 +419,11 @@ object PQVexRiscv {
       ),
       new CsrPlugin(
         CsrPluginConfig
-          .smallest(0x80000000L)
+          .smallest(0x00000000L)
           .copy(
             mtvecAccess = CsrAccess.READ_WRITE,
             mcycleAccess = CsrAccess.READ_ONLY,
-            minstretAccess = CsrAccess.READ_ONLY
+            minstretAccess = CsrAccess.READ_ONLY 
           )
       ),
       new DecoderSimplePlugin(

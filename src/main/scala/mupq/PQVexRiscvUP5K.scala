@@ -6,6 +6,9 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.misc._
 import spinal.lib.bus.simple._
+import spinal.lib.io._
+import spinal.lib.misc.{HexTools}
+import spinal.lib.com.jtag.Jtag
 
 import vexriscv._
 import vexriscv.plugin._
@@ -48,27 +51,151 @@ class PipelinedMemoryBusSPRAM(busConfig: PipelinedMemoryBusConfig) extends Compo
   io.bus.rsp.data := Delay(rams(1).io.DATAOUT ## rams(0).io.DATAOUT, 1, init = B(0))
 }
 
+class PipelinedMemoryBusEBRAM(onChipRamSize : BigInt, onChipRamHexFile : String, pipelinedMemoryBusConfig : PipelinedMemoryBusConfig) extends Component{
+  val io = new Bundle{
+    val bus = slave(PipelinedMemoryBus(pipelinedMemoryBusConfig))
+  }
+
+  val ram = Mem(Bits(32 bits), onChipRamSize / 4)
+  io.bus.rsp.valid := RegNext(io.bus.cmd.fire && !io.bus.cmd.write) init(False)
+  io.bus.rsp.data := ram.readWriteSync(
+    address = (io.bus.cmd.address >> 2).resized,
+    data  = io.bus.cmd.data,
+    enable  = io.bus.cmd.valid,
+    write  = io.bus.cmd.write,
+    mask  = io.bus.cmd.mask
+  )
+  io.bus.cmd.ready := True
+
+  if(onChipRamHexFile != null){
+    HexTools.initRam(ram, onChipRamHexFile, 0x80000000l)
+  }
+}
+
 class PQVexRiscvUP5K(
   val coreFrequency: HertzNumber = 12 MHz,
+  
   cpuPlugins: () => Seq[Plugin[VexRiscv]] = PQVexRiscv.withDSPMultiplier()
 )
 extends PQVexRiscv(
   cpuPlugins = cpuPlugins,
-  ibusRange = SizeMapping(0x80000000L, 128 KiB)
+  gpioWidth = 4,
+  ibusRange = SizeMapping(0x00000000L, 256 KiB) // spans RAM and ROM
 ) {
   val io = new Bundle {
-    val ice_clk = in Bool
+    val clk = in Bool
     /* UART */
-    val iob_8a = out Bool // TXD
-    val iob_9b = in Bool  // RXD
+    val io_uart_txd = out Bool // TXD
+    val io_uart_rxd = in Bool // RXD
     /* JTAG */
-    val iob_23b    = out Bool // TDO
-    val iob_25b_g3 = in Bool  // TCK
-    val iob_24a    = in Bool  // TDI
-    val iob_29b    = in Bool  // TMS
+    
+    val jtag_tdo = out Bool // TDO
+    val jtag_tck = in Bool // TCK
+    val jtag_tdi = in Bool // TDI
+    val jtag_tms = in Bool // TMS
+  
+    val reset = in Bool
+    
+    val spi_miso_i = in Bool
+    val spi_miso_o = out Bool
+    val spi_miso_oe = out Bool
+
+    val spi_mosi_i = in Bool
+    val spi_mosi_o = out Bool
+    val spi_mosi_oe = out Bool
+
+    val spi_sck_i = in Bool
+    val spi_sck_o = out Bool
+    val spi_sck_oe = out Bool
+
+    val spi_ss_i = in Bool
+    val spi_ss_o = out Bool
+    val spi_ss_oe = out Bool
+
+    val gpio_0_i = in Bool
+    val gpio_0_o = out Bool
+    val gpio_0_oe = out Bool
+
+    val gpio_1_i = in Bool
+    val gpio_1_o = out Bool
+    val gpio_1_oe = out Bool
+
+    val gpio_2_i = in Bool
+    val gpio_2_o = out Bool
+    val gpio_2_oe = out Bool
+
+    val gpio_3_i = in Bool
+    val gpio_3_o = out Bool
+    val gpio_3_oe = out Bool
+
+    val i2c_sda_0_i = in Bool
+    val i2c_sda_0_o = out Bool
+    val i2c_sda_0_oe = out Bool
+    val i2c_scl_0_i = in Bool
+    val i2c_scl_0_o = out Bool
+    val i2c_scl_0_oe = out Bool
+
+    val i2c_sda_1_i = in Bool
+    val i2c_sda_1_o = out Bool
+    val i2c_sda_1_oe = out Bool
+    val i2c_scl_1_i = in Bool
+    val i2c_scl_1_o = out Bool
+    val i2c_scl_1_oe = out Bool
   }
-  asyncReset := False
-  mainClock := io.ice_clk
+  
+  asyncReset := !io.reset
+  
+  ice40i2c0.io.scl_i := io.i2c_scl_0_i
+  io.i2c_scl_0_o := ice40i2c0.io.scl_o
+  io.i2c_scl_0_oe := ice40i2c0.io.scl_oe
+
+  ice40i2c0.io.sda_i := io.i2c_sda_0_i
+  io.i2c_sda_0_o := ice40i2c0.io.sda_o
+  io.i2c_sda_0_oe := ice40i2c0.io.sda_oe
+
+  ice40i2c1.io.scl_i := io.i2c_scl_1_i
+  io.i2c_scl_1_o := ice40i2c1.io.scl_o
+  io.i2c_scl_1_oe := ice40i2c1.io.scl_oe
+
+  ice40i2c1.io.sda_i := io.i2c_sda_1_i
+  io.i2c_sda_1_o := ice40i2c1.io.sda_o
+  io.i2c_sda_1_oe := ice40i2c1.io.sda_oe
+
+
+  gpio(0).read := io.gpio_0_i
+  io.gpio_0_o := gpio(0).write
+  io.gpio_0_oe := gpio(0).writeEnable
+
+  gpio(1).read := io.gpio_1_i
+  io.gpio_1_o := gpio(1).write
+  io.gpio_1_oe := gpio(1).writeEnable
+
+  gpio(2).read := io.gpio_2_i
+  io.gpio_2_o := gpio(2).write
+  io.gpio_2_oe := gpio(2).writeEnable
+
+  gpio(3).read := io.gpio_3_i
+  io.gpio_3_o := gpio(3).write
+  io.gpio_3_oe := gpio(3).writeEnable
+
+  ice40spi.io.mosi_i := io.spi_mosi_i
+  io.spi_mosi_o := ice40spi.io.mosi_o
+  io.spi_mosi_oe := ice40spi.io.mosi_oe
+
+  ice40spi.io.miso_i := io.spi_miso_i
+  io.spi_miso_o := ice40spi.io.miso_o
+  io.spi_miso_oe := ice40spi.io.miso_oe
+
+  ice40spi.io.sck_i := io.spi_sck_i
+  io.spi_sck_o := ice40spi.io.sck_o
+  io.spi_sck_oe := ice40spi.io.sck_oe
+
+  ice40spi.io.ss_i := io.spi_ss_i
+  io.spi_ss_o := ice40spi.io.ss_o
+  io.spi_ss_oe := ice40spi.io.ss_oe
+  
+  mainClock := io.clk
+  
   /* Remove io_ prefix from generated Verilog */
   noIoPrefix()
   /* PLL */
@@ -81,19 +208,21 @@ extends PQVexRiscv(
   //  pll.io.BYPASS := False
   //  pll.io.RESETB := True
   /* Plugins */
-  io.iob_23b := jtag.tdo
-  jtag.tck := io.iob_25b_g3
-  jtag.tdi := io.iob_24a
-  jtag.tms := io.iob_29b
+  io.jtag_tdo := jtag.tdo
+  jtag.tck := io.jtag_tck
+  jtag.tdi := io.jtag_tdi
+  jtag.tms := io.jtag_tms
 
-  uart.rxd := io.iob_9b
-  io.iob_8a := uart.txd
+  uart.rxd := io.io_uart_rxd
+  io.io_uart_txd := uart.txd
 
   val memory = new ClockingArea(systemClockDomain) {
+    val rom1 = new PipelinedMemoryBusEBRAM(8192, null, busConfig)
+    busSlaves += rom1.io.bus -> SizeMapping(0x00000000l, 128 KiB)
     val ram1 = new PipelinedMemoryBusSPRAM(busConfig)
-    busSlaves += ram1.io.bus -> SizeMapping(0x80000000L, 64 KiB)
+    busSlaves += ram1.io.bus -> SizeMapping(0x00020000L, 64 KiB)
     val ram2 = new PipelinedMemoryBusSPRAM(busConfig)
-    busSlaves += ram2.io.bus -> SizeMapping(0x80000000L + (64 KiB).toLong, 64 KiB)
+    busSlaves += ram2.io.bus -> SizeMapping(0x00020000L + (64 KiB).toLong, 64 KiB)
   }
 }
 
