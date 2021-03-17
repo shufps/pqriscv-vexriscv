@@ -17,7 +17,7 @@ import spinal.lib.com.uart._
 import vexriscv._
 import vexriscv.demo.MuraxApb3Timer
 import vexriscv.plugin._
-/*
+
 class Apb3Key extends Component{
   val apbConfig = Apb3Config(
     addressWidth  = 12,
@@ -35,8 +35,8 @@ class Apb3Key extends Component{
   io.apb.PRDATA := RegNext(data.asBits).resize(32)
   io.apb.PREADY := True
 }
-*/
 
+/*
 class Apb3Key(onChipRamBinFile : String) extends Component{
   import java.nio.file.{Files, Paths}
   val byteArray = Files.readAllBytes(Paths.get(onChipRamBinFile))
@@ -56,7 +56,7 @@ class Apb3Key(onChipRamBinFile : String) extends Component{
   io.apb.PRDATA := rom.readAsync(RegNext(io.apb.PADDR >> 2))
   io.apb.PREADY := True
 }
-
+*/
 class ICE40I2CMaster(i2cnum: Int = 0) extends Component {
   val apbConfig = Apb3Config(
     addressWidth  = 12,
@@ -87,14 +87,14 @@ class ICE40I2CMaster(i2cnum: Int = 0) extends Component {
     
   i2c.io.SBRWI := rw
   i2c.io.SBSTBI := wr_enable
-  i2c.io.SBADRI0 := io.apb.PADDR(0)
-  i2c.io.SBADRI1 := io.apb.PADDR(1)
-  i2c.io.SBADRI2 := io.apb.PADDR(2)
-  i2c.io.SBADRI3 := io.apb.PADDR(3)
-  i2c.io.SBADRI4 := io.apb.PADDR(4)
-  i2c.io.SBADRI5 := io.apb.PADDR(5)
-  i2c.io.SBADRI6 := io.apb.PADDR(6)
-  i2c.io.SBADRI7 := io.apb.PADDR(7)
+  i2c.io.SBADRI0 := io.apb.PADDR(2) // address with 32bit address
+  i2c.io.SBADRI1 := io.apb.PADDR(3)
+  i2c.io.SBADRI2 := io.apb.PADDR(4)
+  i2c.io.SBADRI3 := io.apb.PADDR(5)
+  i2c.io.SBADRI4 := io.apb.PADDR(6)
+  i2c.io.SBADRI5 := io.apb.PADDR(7)
+  i2c.io.SBADRI6 := io.apb.PADDR(8)
+  i2c.io.SBADRI7 := io.apb.PADDR(9)
   
   i2c.io.SBDATI0 := io.apb.PWDATA(0)
   i2c.io.SBDATI1 := io.apb.PWDATA(1)
@@ -157,14 +157,14 @@ class ICE40SPIMaster extends Component {
     
   spi.io.SBRWI := rw
   spi.io.SBSTBI := wr_enable
-  spi.io.SBADRI0 := io.apb.PADDR(0)
-  spi.io.SBADRI1 := io.apb.PADDR(1)
-  spi.io.SBADRI2 := io.apb.PADDR(2)
-  spi.io.SBADRI3 := io.apb.PADDR(3)
-  spi.io.SBADRI4 := io.apb.PADDR(4)
-  spi.io.SBADRI5 := io.apb.PADDR(5)
-  spi.io.SBADRI6 := io.apb.PADDR(6)
-  spi.io.SBADRI7 := io.apb.PADDR(7)
+  spi.io.SBADRI0 := io.apb.PADDR(2) // address with 32bit address
+  spi.io.SBADRI1 := io.apb.PADDR(3)
+  spi.io.SBADRI2 := io.apb.PADDR(4)
+  spi.io.SBADRI3 := io.apb.PADDR(5)
+  spi.io.SBADRI4 := io.apb.PADDR(6)
+  spi.io.SBADRI5 := io.apb.PADDR(7)
+  spi.io.SBADRI6 := io.apb.PADDR(8)
+  spi.io.SBADRI7 := io.apb.PADDR(9)
   
   spi.io.SBDATI0 := io.apb.PWDATA(0)
   spi.io.SBDATI1 := io.apb.PWDATA(1)
@@ -367,7 +367,7 @@ extends Component {
       ice40i2c1 = new ICE40I2CMaster(1)
       apbMapping += ice40i2c1.io.apb -> (0x50000, 4 KiB)
       
-      key = new Apb3Key("src/main/scala/mupq/secret.key")
+      key = new Apb3Key(/*"src/main/scala/mupq/secret.key"*/)
       apbMapping += key.io.apb -> (0x60000, 4 KiB)
       
       val apbDecoder = Apb3Decoder(
@@ -410,7 +410,7 @@ object PQVexRiscv {
         cmdForkPersistence = false,
         prediction = NONE,
         catchAccessFault = false,
-        compressedGen = false
+        compressedGen = true
       ),
       new DBusSimplePlugin(
         catchAddressMisaligned = false,

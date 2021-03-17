@@ -68,12 +68,12 @@ class PipelinedMemoryBusEBRAM(onChipRamSize : BigInt, onChipRamHexFile : String,
   io.bus.cmd.ready := True
 
   if(onChipRamHexFile != null){
-    HexTools.initRam(ram, onChipRamHexFile, 0x80000000l)
+    HexTools.initRam(ram, onChipRamHexFile, 0x00000000l)
   }
 }
 
 class PQVexRiscvUP5K(
-  val coreFrequency: HertzNumber = 12 MHz,
+  val coreFrequency: HertzNumber = 24 MHz,
   
   cpuPlugins: () => Seq[Plugin[VexRiscv]] = PQVexRiscv.withDSPMultiplier()
 )
@@ -217,7 +217,7 @@ extends PQVexRiscv(
   io.io_uart_txd := uart.txd
 
   val memory = new ClockingArea(systemClockDomain) {
-    val rom1 = new PipelinedMemoryBusEBRAM(8192, null, busConfig)
+    val rom1 = new PipelinedMemoryBusEBRAM(12288, null, busConfig)
     busSlaves += rom1.io.bus -> SizeMapping(0x00000000l, 128 KiB)
     val ram1 = new PipelinedMemoryBusSPRAM(busConfig)
     busSlaves += ram1.io.bus -> SizeMapping(0x00020000L, 64 KiB)
