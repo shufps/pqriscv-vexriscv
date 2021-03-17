@@ -81,12 +81,9 @@ class ICE40I2CMaster(i2cnum: Int = 0) extends Component {
   
   i2c.addGeneric("BUS_ADDR74", if (i2cnum == 0) { "0b0001"} else { "0b0011" })
 
-  val wr_enable = io.apb.PENABLE && io.apb.PWRITE && io.apb.PSEL(0)
-  //val rd_enable = !io.apb.PWRITE && io.apb.PSEL(0)
-  val rw = io.apb.PWRITE
-    
-  i2c.io.SBRWI := rw
-  i2c.io.SBSTBI := wr_enable
+  i2c.io.SBSTBI := io.apb.PENABLE && io.apb.PSEL(0)
+  i2c.io.SBRWI := io.apb.PWRITE
+  
   i2c.io.SBADRI0 := io.apb.PADDR(2) // address with 32bit address
   i2c.io.SBADRI1 := io.apb.PADDR(3)
   i2c.io.SBADRI2 := io.apb.PADDR(4)
@@ -117,7 +114,7 @@ class ICE40I2CMaster(i2cnum: Int = 0) extends Component {
              i2c.io.SBDATO3 ## i2c.io.SBDATO2 ## i2c.io.SBDATO1 ## i2c.io.SBDATO0
              
   io.apb.PRDATA := RegNext(data).resize(32)
-  io.apb.PREADY := True
+  io.apb.PREADY := RegNext(i2c.io.SBACKO)
 }
 
 class ICE40SPIMaster extends Component {
@@ -151,12 +148,9 @@ class ICE40SPIMaster extends Component {
   val spi = new Ice40SPI
   spi.addGeneric("BUS_ADDR74", "0b0000")
 
-  val wr_enable = io.apb.PENABLE && io.apb.PWRITE && io.apb.PSEL(0)
-  //val rd_enable = !io.apb.PWRITE && io.apb.PSEL(0)
-  val rw = io.apb.PWRITE
-    
-  spi.io.SBRWI := rw
-  spi.io.SBSTBI := wr_enable
+  spi.io.SBSTBI := io.apb.PENABLE && io.apb.PSEL(0)
+  spi.io.SBRWI := io.apb.PWRITE
+  
   spi.io.SBADRI0 := io.apb.PADDR(2) // address with 32bit address
   spi.io.SBADRI1 := io.apb.PADDR(3)
   spi.io.SBADRI2 := io.apb.PADDR(4)
@@ -195,7 +189,7 @@ class ICE40SPIMaster extends Component {
              spi.io.SBDATO3 ## spi.io.SBDATO2 ## spi.io.SBDATO1 ## spi.io.SBDATO0
              
   io.apb.PRDATA := RegNext(data).resize(32)
-  io.apb.PREADY := True
+  io.apb.PREADY := RegNext(spi.io.SBACKO)
 }
 
 

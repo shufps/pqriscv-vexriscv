@@ -207,7 +207,7 @@ class Ice40I2C extends BlackBox {
         val SBDATO5 = out Bool
         val SBDATO6 = out Bool
         val SBDATO7 = out Bool
-//        val SBACKO = out Bool
+        val SBACKO = out Bool
 //        val I2CIRQ = out Bool
 //        val I2CWKUP = out Bool
         val SCLI = in Bool
@@ -255,7 +255,7 @@ class Ice40SPI extends BlackBox {
         val SBDATO5 = out Bool
         val SBDATO6 = out Bool
         val SBDATO7 = out Bool
-//        val SBACKO = out Bool
+        val SBACKO = out Bool
 //        val SPIIRQ = out Bool
 //        val SPIWKUP = out Bool
         val SO = out Bool
