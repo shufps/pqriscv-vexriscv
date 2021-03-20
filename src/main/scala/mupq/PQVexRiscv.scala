@@ -399,7 +399,7 @@ object PQVexRiscv {
   def baseConfig(base: PluginGen = () => Seq()) = () =>
     base() ++ Seq(
       new IBusSimplePlugin(
-        resetVector = 0x00000000L,
+        resetVector = 0x00020000L,
         cmdForkOnSecondStage = true,
         cmdForkPersistence = false,
         prediction = NONE,
@@ -413,7 +413,7 @@ object PQVexRiscv {
       ),
       new CsrPlugin(
         CsrPluginConfig
-          .smallest(0x00000000L)
+          .smallest(0x00020000L)
           .copy(
             mtvecAccess = CsrAccess.READ_WRITE,
             mcycleAccess = CsrAccess.READ_ONLY,
